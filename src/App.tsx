@@ -1,7 +1,41 @@
-import React, { useState, type HTMLAttributes } from "react";
+import React, {
+  useEffect,
+  useState,
+  type CSSProperties,
+  type HTMLAttributes,
+} from "react";
+
+type Coordinate = {
+  x: number;
+  y: number;
+};
 
 function App() {
   const [columns, setColumns] = useState([["item1"], ["item2"]]);
+  const [draggedItem, setDraggedItem] = useState<{
+    item: string;
+    styles: CSSProperties;
+    dragOffset: Coordinate;
+  } | null>(null);
+  const [cursorPos, setCursorPos] = useState<Coordinate>({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setCursorPos({ x: e.clientX, y: e.clientY });
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      setCursorPos({ x: e.pageX, y: e.pageY });
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("dragover", handleDragOver);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("dragover", handleDragOver);
+    };
+  });
 
   const handleDrop = (e: React.DragEvent, toColumn: number) => {
     const item = e.dataTransfer.getData("item"); // use JSON.parse() here if complex data
@@ -19,6 +53,8 @@ function App() {
 
       return newColumns; // return the new column data
     });
+
+    setDraggedItem(null);
   };
 
   const handleDragStart = (
@@ -28,10 +64,53 @@ function App() {
   ) => {
     e.dataTransfer.setData("item", item); // use JSON.stringify(item) if array or object
     e.dataTransfer.setData("fromColumn", fromColumn.toString()); // because the function only accepts strings
+
+    const el = e.target as HTMLElement;
+    el.style.opacity = "0.01";
+
+    const handleDragEnd = () => {
+      el.style.opacity = "1";
+      setDraggedItem(null);
+      el.removeEventListener("dragend", handleDragEnd);
+    };
+
+    el.addEventListener("dragend", handleDragEnd);
+
+    const {
+      backgroundColor,
+      border,
+      width,
+      height,
+      borderRadius,
+      display,
+      alignItems,
+      justifyContent,
+      fontWeight,
+    } = getComputedStyle(el);
+
+    const rect = el.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    setDraggedItem({
+      item,
+      styles: {
+        backgroundColor,
+        border,
+        width,
+        height,
+        borderRadius,
+        display,
+        alignItems,
+        justifyContent,
+        fontWeight,
+      },
+      dragOffset: { x: offsetX, y: offsetY },
+    });
   };
 
   return (
-    <main className="h-svh w-svw flex gap-20 items-center justify-center">
+    <main className="relative h-svh w-svw flex gap-20 items-center justify-center">
       {columns.map((items, cidx) => (
         <Column
           key={cidx}
@@ -49,6 +128,19 @@ function App() {
           ))}
         </Column>
       ))}
+      {/* drag image */}
+      {draggedItem && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            ...draggedItem.styles,
+            top: cursorPos.y - draggedItem.dragOffset.y,
+            left: cursorPos.x - draggedItem.dragOffset.x,
+          }}
+        >
+          {draggedItem.item}
+        </div>
+      )}
     </main>
   );
 }
